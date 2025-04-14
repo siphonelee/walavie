@@ -565,48 +565,49 @@ func (c WalrusClient) CopyRecursive(basePath string, newDir string, currentDirOb
 }
 
 func (c WalrusClient) CopyInternal(ctx context.Context, srcConn, destConn *connparse.Connection, opts *wshrpc.FileCopyOpts) (bool, error) {
-	if destConn.Scheme != "wsh" || destConn.Host != "local" {
-		return false, fmt.Errorf("destination not supported")
-	}
-
-	fi, err := c.Stat(ctx, srcConn)
-	if err != nil {
-		return false, err
-	}
-
-	destPath, err := fileutil.FixPath(destConn.Path)
-	if err != nil {
-		return false, err
-	}
-
-	if fi.IsDir {
-		res, err := get_dir_all(c.config, srcConn.Path)
+	if destConn.Scheme == "wsh" && destConn.Host == "local" {
+		// walrus -> local
+		fi, err := c.Stat(ctx, srcConn)
 		if err != nil {
 			return false, err
 		}
 
-		newDir := fsutil.GetEndingPart(srcConn.Path)
-
-		return c.CopyRecursive(destPath, newDir, res.Dirobj, res)
-	} else {
-		filename := fsutil.GetEndingPart(srcConn.Path)
-		_, err := os.Open(destPath + fspath.Separator + filename)
-		if !os.IsNotExist(err) {
-			return false, fmt.Errorf("destination path already exists")
-		}
-
-		destname := destPath + fspath.Separator + filename
-		b, err := get_file(c.config, fi.WalrusBlobId)
+		destPath, err := fileutil.FixPath(destConn.Path)
 		if err != nil {
-			return false, fmt.Errorf("failed to get walrus blob " + fi.WalrusBlobId)
-		}
-		err = os.WriteFile(destname, b, 0644)
-		if err != nil {
-			return false, fmt.Errorf("failed to write walrus blob to " + filename)
+			return false, err
 		}
 
-		return true, nil
+		if fi.IsDir {
+			res, err := get_dir_all(c.config, srcConn.Path)
+			if err != nil {
+				return false, err
+			}
+
+			newDir := fsutil.GetEndingPart(srcConn.Path)
+
+			return c.CopyRecursive(destPath, newDir, res.Dirobj, res)
+		} else {
+			filename := fsutil.GetEndingPart(srcConn.Path)
+			_, err := os.Open(destPath + fspath.Separator + filename)
+			if !os.IsNotExist(err) {
+				return false, fmt.Errorf("destination path already exists")
+			}
+
+			destname := destPath + fspath.Separator + filename
+			b, err := get_file(c.config, fi.WalrusBlobId)
+			if err != nil {
+				return false, fmt.Errorf("failed to get walrus blob " + fi.WalrusBlobId)
+			}
+			err = os.WriteFile(destname, b, 0644)
+			if err != nil {
+				return false, fmt.Errorf("failed to write walrus blob to " + filename)
+			}
+
+			return true, nil
+		}
 	}
+
+	return false, fmt.Errorf("src/destination not supported")
 }
 
 func (c WalrusClient) Delete(ctx context.Context, conn *connparse.Connection, recursive bool) error {

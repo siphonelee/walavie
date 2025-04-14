@@ -409,42 +409,62 @@ func (impl *ServerImpl) RemoteFileCopyCommand(ctx context.Context, data wshrpc.C
 		return finfo.Size(), nil
 	}
 
-	copyFileToWalrus := func(path string, finfo fs.FileInfo, srcFile string) (int64, error) {
-		walrus := walrusfs.NewWalrusClient()
-		conn := &connparse.Connection{Scheme: "walrus", Host: "local", Path: path}
+	copyDirToWalrus := func(walrus *walrusfs.WalrusClient, destpath string, finfo fs.FileInfo, srcFile string) (int64, error) {
+		conn := &connparse.Connection{Scheme: "walrus", Host: "local", Path: destpath}
 		nextinfo, err := walrus.Stat(context.Background(), conn)
-		if err != nil || nextinfo.NotFound {
-			return 0, fmt.Errorf("cannot stat file %q: %w", path, err)
+		if err != nil {
+			return 0, fmt.Errorf("cannot stat file %q: %w", destpath, err)
 		}
+		if nextinfo.NotFound {
+			// try creating the dir
+			err = walrus.Mkdir(context.Background(), conn)
+			if err != nil {
+				return 0, fmt.Errorf("cannot mkdir %q: %w", destpath, err)
+			}
+		}
+
+		return 0, nil
+	}
+
+	copyFileToWalrus := func(walrus *walrusfs.WalrusClient, destpath string, finfo fs.FileInfo, srcFile string) (int64, error) {
+		conn := &connparse.Connection{Scheme: "walrus", Host: "local", Path: destpath}
+		nextinfo, err := walrus.Stat(context.Background(), conn)
+		if err != nil {
+			return 0, fmt.Errorf("cannot stat file %q: %w", destpath, err)
+		}
+		/*
+			else if nextinfo.NotFound && !finfo.IsDir() {
+				// file copy to existing dir - parent folder not existing
+				return 0, fmt.Errorf("path error")
+			}
+		*/
 
 		if nextinfo != nil {
 			if nextinfo.IsDir {
-				if !finfo.IsDir() {
-					// try to create file in directory
-					path = filepath.Join(path, filepath.Base(finfo.Name()))
-					conn.Path = path
-					newdestinfo, err := walrus.Stat(context.Background(), conn)
-					if err != nil {
-						return 0, fmt.Errorf("cannot stat file %q: %w", path, err)
-					}
-					if !newdestinfo.NotFound && !overwrite {
-						return 0, fmt.Errorf(fstype.OverwriteRequiredError, path)
-					}
-				} else if overwrite {
-				} else if !merge {
-					return 0, fmt.Errorf(fstype.MergeRequiredError, path)
+				// file copy to existing dir
+				// try to create file in directory
+				destpath = filepath.Join(destpath, filepath.Base(finfo.Name()))
+				conn.Path = destpath
+				newdestinfo, err := walrus.Stat(context.Background(), conn)
+				if err != nil {
+					return 0, fmt.Errorf("cannot stat file %q: %w", destpath, err)
+				}
+				if !newdestinfo.NotFound && !overwrite {
+					return 0, fmt.Errorf(fstype.OverwriteRequiredError, destpath)
 				}
 			} else {
-				if !overwrite {
-					return 0, fmt.Errorf(fstype.OverwriteRequiredError, path)
-				} else if finfo.IsDir() {
+				// file copy
+				if !nextinfo.NotFound {
+					if !overwrite {
+						return 0, fmt.Errorf(fstype.OverwriteRequiredError, destpath)
+					}
 				}
 			}
 		}
 
 		err = walrus.Mkfile(context.Background(), srcFile, conn.Path, overwrite)
 		if err != nil {
-			return 0, fmt.Errorf("cannot create walrus file %q: %w", path, err)
+			return 0, fmt.Errorf("cannot create walrus file %q: %w", destpath, err)
 		}
 
 		return finfo.Size(), nil
@@ -506,12 +526,20 @@ func (impl *ServerImpl) RemoteFileCopyCommand(ctx context.Context, data wshrpc.C
 		}
 	} else if srcConn.Host == destConn.Host && srcConn.Scheme != connparse.ConnectionTypeWalrus && destConn.Scheme == connparse.ConnectionTypeWalrus {
 		// local -> walrus
+		walrus := walrusfs.NewWalrusClient()
+
 		srcPathCleaned := filepath.Clean(wavebase.ExpandHomeDirSafe(srcConn.Path))
 
 		srcFileStat, err := os.Stat(srcPathCleaned)
 		if err != nil {
 			return false, fmt.Errorf("cannot stat file %q: %w", srcPathCleaned, err)
 		}
+
+		fi, err := walrus.Stat(ctx, &connparse.Connection{Scheme: "walrus", Host: "local", Path: destConn.Path})
+		if err != nil {
+			return false, fmt.Errorf("cannot stat walrus %q: %w", destConn.Path, err)
+		}
+		destIsDir = fi.IsDir
 
 		if srcFileStat.IsDir() {
 			srcIsDir = true
@@ -535,7 +563,12 @@ func (impl *ServerImpl) RemoteFileCopyCommand(ctx context.Context, data wshrpc.C
 					}
 					defer utilfn.GracefulClose(file, "RemoteFileCopyCommand", srcFilePath)
 				}
-				_, err = copyFileFunc(destFilePath, info, file)
+
+				if info.IsDir() {
+					_, err = copyDirToWalrus(walrus, destFilePath, info, srcFilePath)
+				} else {
+					_, err = copyFileToWalrus(walrus, destFilePath, info, srcFilePath)
+				}
 				return err
 			})
 			if err != nil {
@@ -549,14 +582,16 @@ func (impl *ServerImpl) RemoteFileCopyCommand(ctx context.Context, data wshrpc.C
 				return false, fmt.Errorf("cannot open file %q: %w", srcPathCleaned, err)
 			}
 			defer utilfn.GracefulClose(file, "RemoteFileCopyCommand", srcPathCleaned)
-			var destFilePath string
-			if destHasSlash {
-				destFilePath = filepath.Join(destPathCleaned, filepath.Base(srcPathCleaned))
-			} else {
-				destFilePath = destPathCleaned
-			}
-
-			_, err = copyFileToWalrus(destFilePath, srcFileStat, srcPathCleaned)
+			/*
+				var destFilePath string
+				if destHasSlash {
+					destFilePath = filepath.Join(destPathCleaned, filepath.Base(srcPathCleaned))
+				} else {
+					destFilePath = destPathCleaned
+				}
+			*/
+			destFilePath := destPathCleaned
+			_, err = copyFileToWalrus(walrus, destFilePath, srcFileStat, srcPathCleaned)
 			if err != nil {
 				return false, fmt.Errorf("cannot copy %q to %q: %w", srcUri, destUri, err)
 			}
