@@ -1,8 +1,8 @@
 {
     "defwidget@walrus": {
         "display:order": -6,
-        "icon": "archive",
-        "label": "walrus",
+        "icon": "narwhal",
+        "label": "walrus store",
         "blockdef": {
             "meta": {
                 "view": "preview",
