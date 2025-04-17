@@ -1,6 +1,6 @@
-# Building Wave Terminal
+# Building Walavie Terminal
 
-These instructions are for setting up dependencies and building Wave Terminal from source on macOS, Linux, and Windows.
+These instructions are for setting up dependencies and building Walavie Terminal from source on macOS, Linux, and Windows.
 
 ## Prerequisites
 
@@ -93,13 +93,13 @@ For more information on Corepack, check out [this link](https://yarnpkg.com/core
 ## Clone the Repo
 
 ```sh
-git clone git@github.com:wavetermdev/waveterm.git
+git clone git@github.com:siphonelee/walavie.git
 ```
 
 or
 
 ```sh
-git clone https://github.com/wavetermdev/waveterm.git
+git clone https://github.com/siphonelee/walavie.git
 ```
 
 ## Install code dependencies
@@ -152,4 +152,4 @@ You can use the regular Chrome DevTools to debug the frontend application. You c
 
 ### Backend logs
 
-Backend logs for the development version of Wave can be found at `~/.waveterm-dev/waveapp.log`. Both the NodeJS backend from Electron and the main Go backend will log here.
+Backend logs for the development version of Walavie can be found at `~/.waveterm-dev/waveapp.log`. Both the NodeJS backend from Electron and the main Go backend will log here.

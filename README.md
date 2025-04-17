@@ -1,9 +1,8 @@
 <p align="center">
   <a href="https://www.waveterm.dev">
 	<picture>
-		<source media="(prefers-color-scheme: dark)" srcset="./assets/wave-dark.png">
-		<source media="(prefers-color-scheme: light)" srcset="./assets/wave-light.png">
-		<img alt="Walavie Terminal Logo" src="./assets/wave-light.png" width="240">
+		<source srcset="./assets/walavie.png">
+		<img alt="Walavie Terminal Logo" src="./assets/walavie.png" width="240">
 	</picture>
   </a>
   <br/>
@@ -27,7 +26,7 @@ Modern development involves constantly switching between terminals and browsers 
 - One-click remote connections with full terminal and file system access
 - Rich customization including tab themes, terminal styles, and background images
 - Powerful `wsh` command system for managing your workspace from the CLI and sharing data between terminal sessions
-- Sui & Walrus as backend service to ensure secure, highly available, decentralized data storage 
+- Sui & Walrus as the backend service to ensure secure, highly available, decentralized data storage 
 
 ## Installation
 
