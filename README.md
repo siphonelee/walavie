@@ -61,4 +61,10 @@ See [Building Walavie Terminal](BUILD.md).
 
 ## License
 
-Walavie Terminal is licensed under the Apache-2.0 License. For more information on our dependencies, see [here](./ACKNOWLEDGEMENTS.md).
+Walavie Terminal is licensed under the Apache-2.0 License.
+
+## Acknowledge
+
+Forked from and thanks to 
+- [Wave Terminal](https://github.com/wavetermdev/waveterm)
+
