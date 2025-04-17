@@ -14,7 +14,7 @@ Walavie is an open-source terminal that combines traditional terminal features w
 
 Modern development involves constantly switching between terminals and browsers - checking documentation, previewing files, monitoring systems, and using AI tools. Walavie brings these graphical tools directly into the terminal, letting you control them from the command line. This means you can stay in your terminal workflow while still having access to the visual interfaces you need.
 
-![WalavieTerm Screenshot](./assets/wave-screenshot.webp)
+![Walavie Terminal Screenshot](./assets/walavie-screenshot.png)
 
 ## Key Features
 
@@ -52,7 +52,6 @@ The WSH helper runs on the following platforms:
 
 - Homepage &mdash; https://www.waveterm.dev
 - Documentation &mdash; https://docs.waveterm.dev
-- Legacy Documentation &mdash; https://legacydocs.waveterm.dev
 
 ## Building from Source
 
