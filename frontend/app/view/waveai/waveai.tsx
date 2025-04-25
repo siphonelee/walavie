@@ -367,11 +367,18 @@ export class WaveAiModel implements ViewModel {
                 prompt: [...history, newPrompt],
             };
             let fullMsg = "";
+            let isJson = false;
             try {
                 const aiGen = RpcApi.StreamWaveAiCommand(TabRpcClient, beMsg, { timeout: opts.timeoutms });
                 for await (const msg of aiGen) {
                     fullMsg += msg.text ?? "";
-                    globalStore.set(this.updateLastMessageAtom, msg.text ?? "", true);
+
+                    if (fullMsg.startsWith("`") && !isJson) {
+                        isJson = true;
+                    } else if (!isJson) {
+                        globalStore.set(this.updateLastMessageAtom, msg.text ?? "", true);
+                    }
+
                     if (this.cancel) {
                         break;
                     }
@@ -382,6 +389,11 @@ export class WaveAiModel implements ViewModel {
                     // only save the author's prompt
                     await BlockService.SaveWaveAiData(this.blockId, [...history, newPrompt]);
                 } else {
+                    if (isJson) {
+                        let sub = fullMsg.split("```");
+                        fullMsg = sub[2];
+                        globalStore.set(this.updateLastMessageAtom, fullMsg, true);
+                    }
                     const responsePrompt: WaveAIPromptMessageType = {
                         role: "assistant",
                         content: fullMsg,
@@ -389,19 +401,30 @@ export class WaveAiModel implements ViewModel {
                     //mark message as complete
                     globalStore.set(this.updateLastMessageAtom, "", false);
                     // save a complete message prompt and response
-                    await BlockService.SaveWaveAiData(this.blockId, [...history, newPrompt, responsePrompt]);
+                    if (!isJson) {
+                        await BlockService.SaveWaveAiData(this.blockId, [...history, newPrompt, responsePrompt]);
+                    }
                 }
             } catch (error) {
+                console.log("error: ", (error as Error).message);
+
                 const updatedHist = [...history, newPrompt];
                 if (fullMsg == "") {
                     globalStore.set(this.removeLastMessageAtom);
                 } else {
-                    globalStore.set(this.updateLastMessageAtom, "", false);
-                    const responsePrompt: WaveAIPromptMessageType = {
-                        role: "assistant",
-                        content: fullMsg,
-                    };
-                    updatedHist.push(responsePrompt);
+                    if (isJson) {
+                        let sub = fullMsg.split("```");
+                        fullMsg = sub[2];
+                    }
+                    if (fullMsg == "") {
+                        globalStore.set(this.removeLastMessageAtom);
+                    } else {
+                        const responsePrompt: WaveAIPromptMessageType = {
+                            role: "assistant",
+                            content: fullMsg,
+                        };
+                        updatedHist.push(responsePrompt);
+                    }
                 }
                 const errMsg: string = (error as Error).message;
                 const errorMessage: ChatMessageType = {
@@ -416,7 +439,9 @@ export class WaveAiModel implements ViewModel {
                     content: errMsg,
                 };
                 updatedHist.push(errorPrompt);
-                await BlockService.SaveWaveAiData(this.blockId, updatedHist);
+                if (!isJson) {
+                    await BlockService.SaveWaveAiData(this.blockId, updatedHist);
+                }
             }
             this.setLocked(false);
             this.cancel = false;

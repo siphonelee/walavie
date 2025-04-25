@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/wavetermdev/waveterm/pkg/panichandler"
+	"github.com/wavetermdev/waveterm/pkg/remote/fileshare/fileop"
 	"github.com/wavetermdev/waveterm/pkg/wcloud"
 	"github.com/wavetermdev/waveterm/pkg/wshrpc"
 )
@@ -96,6 +98,7 @@ func (WaveAICloudBackend) StreamCompletion(ctx context.Context, request wshrpc.W
 			rtn <- makeAIError(fmt.Errorf("OpenAI request, websocket write config error: %v", err))
 			return
 		}
+		fullmsg := ""
 		for {
 			_, socketMessage, err := conn.ReadMessage()
 			if err == io.EOF {
@@ -112,8 +115,21 @@ func (WaveAICloudBackend) StreamCompletion(ctx context.Context, request wshrpc.W
 				rtn <- makeAIError(fmt.Errorf("OpenAI request, websocket response json decode error: %v", err))
 				break
 			}
+
+			fullmsg += streamResp.Text
+
 			if streamResp.Error == PacketEOFStr {
 				// got eof packet from socket
+				fullmsg = strings.TrimPrefix(fullmsg, " ")
+				if strings.HasPrefix(fullmsg, "```") {
+					s, err := fileop.FileOperation(fullmsg)
+					if err == nil {
+						streamResp.Text = s
+						rtn <- wshrpc.RespOrErrorUnion[wshrpc.WaveAIPacketType]{Response: *streamResp}
+					} else {
+						rtn <- makeAIError(fmt.Errorf("%v", err.Error()))
+					}
+				}
 				break
 			} else if streamResp.Error != "" {
 				// use error from server directly
