@@ -598,7 +598,7 @@ func (impl *ServerImpl) RemoteFileCopyCommand(ctx context.Context, data wshrpc.C
 		}
 	} else if srcConn.Host == destConn.Host && srcConn.Scheme == connparse.ConnectionTypeWalrus && destConn.Scheme != connparse.ConnectionTypeWalrus {
 		// walrus -> local
-
+		// not handled here
 	} else {
 		timeout := fstype.DefaultTimeout
 		if opts.Timeout > 0 {

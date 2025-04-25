@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/wavetermdev/waveterm/pkg/remote/connparse"
 	"github.com/wavetermdev/waveterm/pkg/remote/fileshare/fstype"
 	"github.com/wavetermdev/waveterm/pkg/remote/fileshare/walrusfs"
+	"github.com/wavetermdev/waveterm/pkg/util/utilfn"
+	"github.com/wavetermdev/waveterm/pkg/wavebase"
 )
 
 func copyDirToWalrus(walrus *walrusfs.WalrusClient, destpath string, finfo fs.FileInfo, srcFile string) error {
@@ -74,78 +77,78 @@ func copyFileToWalrus(walrus *walrusfs.WalrusClient, destpath string, finfo fs.F
 	return nil
 }
 
-// func CopyLocalToWalrus() {
-// 	walrus := walrusfs.NewWalrusClient()
+func CopyLocalToWalrus(srcpath string, destpath string) error {
+	walrus := walrusfs.NewWalrusClient()
 
-// 	srcPathCleaned := filepath.Clean(wavebase.ExpandHomeDirSafe(srcConn.Path))
+	srcPathCleaned := filepath.Clean(wavebase.ExpandHomeDirSafe(srcpath))
 
-// 	srcFileStat, err := os.Stat(srcPathCleaned)
-// 	if err != nil {
-// 		return false, fmt.Errorf("cannot stat file %q: %w", srcPathCleaned, err)
-// 	}
+	srcFileStat, err := os.Stat(srcPathCleaned)
+	if err != nil {
+		return fmt.Errorf("cannot stat %q: %w", srcPathCleaned, err)
+	}
 
-// 	fi, err := walrus.Stat(ctx, &connparse.Connection{Scheme: "walrus", Host: "local", Path: destConn.Path})
-// 	if err != nil {
-// 		return false, fmt.Errorf("cannot stat walrus %q: %w", destConn.Path, err)
-// 	}
-// 	destIsDir = fi.IsDir
+	fi, err := walrus.Stat(context.Background(), &connparse.Connection{Scheme: "walrus", Host: "local", Path: destpath})
+	if err != nil {
+		return fmt.Errorf("cannot stat walrus %q: %w", destpath, err)
+	}
+	destIsDir := fi.IsDir
 
-// 	if srcFileStat.IsDir() {
-// 		srcIsDir = true
-// 		var srcPathPrefix string
-// 		if destIsDir {
-// 			srcPathPrefix = filepath.Dir(srcPathCleaned)
-// 		} else {
-// 			srcPathPrefix = srcPathCleaned
-// 		}
-// 		err = filepath.Walk(srcPathCleaned, func(path string, info fs.FileInfo, err error) error {
-// 			if err != nil {
-// 				return err
-// 			}
-// 			srcFilePath := path
-// 			destFilePath := filepath.Join(destPathCleaned, strings.TrimPrefix(path, srcPathPrefix))
-// 			var file *os.File
-// 			if !info.IsDir() {
-// 				file, err = os.Open(srcFilePath)
-// 				if err != nil {
-// 					return fmt.Errorf("cannot open file %q: %w", srcFilePath, err)
-// 				}
-// 				defer utilfn.GracefulClose(file, "RemoteFileCopyCommand", srcFilePath)
-// 			}
+	if srcFileStat.IsDir() {
+		var srcPathPrefix string
+		if destIsDir {
+			srcPathPrefix = filepath.Dir(srcPathCleaned)
+		} else {
+			srcPathPrefix = srcPathCleaned
+		}
+		err = filepath.Walk(srcPathCleaned, func(path string, info fs.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			srcFilePath := path
+			destFilePath := filepath.Join(destpath, strings.TrimPrefix(path, srcPathPrefix))
+			var file *os.File
+			if !info.IsDir() {
+				file, err = os.Open(srcFilePath)
+				if err != nil {
+					return fmt.Errorf("cannot open file %q: %w", srcFilePath, err)
+				}
+				defer utilfn.GracefulClose(file, "RemoteFileCopyCommand", srcFilePath)
+			}
 
-// 			if info.IsDir() {
-// 				_, err = copyDirToWalrus(walrus, destFilePath, info, srcFilePath)
-// 			} else {
-// 				_, err = copyFileToWalrus(walrus, destFilePath, info, srcFilePath)
-// 			}
-// 			return err
-// 		})
-// 		if err != nil {
-// 			return false, fmt.Errorf("cannot copy %q to %q: %w", srcUri, destUri, err)
-// 		}
-// 	} else {
-// 		// local file -> walrus
+			if info.IsDir() {
+				err = copyDirToWalrus(walrus, destFilePath, info, srcFilePath)
+			} else {
+				err = copyFileToWalrus(walrus, destFilePath, info, srcFilePath, false)
+			}
+			return err
+		})
+		if err != nil {
+			return fmt.Errorf("cannot copy %q to %q: %w", srcpath, destpath, err)
+		}
+	} else {
+		// local file -> walrus
+		file, err := os.Open(srcPathCleaned)
+		if err != nil {
+			return fmt.Errorf("cannot open file %q: %w", srcPathCleaned, err)
+		}
+		defer utilfn.GracefulClose(file, "RemoteFileCopyCommand", srcPathCleaned)
+		/*
+			var destFilePath string
+			if destHasSlash {
+				destFilePath = filepath.Join(destPathCleaned, filepath.Base(srcPathCleaned))
+			} else {
+				destFilePath = destPathCleaned
+			}
+		*/
+		destFilePath := destpath
+		err = copyFileToWalrus(walrus, destFilePath, srcFileStat, srcPathCleaned, false)
+		if err != nil {
+			return fmt.Errorf("cannot copy %q to %q: %w", srcpath, destpath, err)
+		}
+	}
 
-// 		file, err := os.Open(srcPathCleaned)
-// 		if err != nil {
-// 			return false, fmt.Errorf("cannot open file %q: %w", srcPathCleaned, err)
-// 		}
-// 		defer utilfn.GracefulClose(file, "RemoteFileCopyCommand", srcPathCleaned)
-// 		/*
-// 			var destFilePath string
-// 			if destHasSlash {
-// 				destFilePath = filepath.Join(destPathCleaned, filepath.Base(srcPathCleaned))
-// 			} else {
-// 				destFilePath = destPathCleaned
-// 			}
-// 		*/
-// 		destFilePath := destPathCleaned
-// 		_, err = copyFileToWalrus(walrus, destFilePath, srcFileStat, srcPathCleaned)
-// 		if err != nil {
-// 			return false, fmt.Errorf("cannot copy %q to %q: %w", srcUri, destUri, err)
-// 		}
-// 	}
-// }
+	return nil
+}
 
 func CopyWalrusToLocal(srcpath string, destpath string) error {
 	walrus := walrusfs.NewWalrusClient()
@@ -173,12 +176,19 @@ func FileOperation(s string) (string, error) {
 	switch jsonMap["operation"] {
 	case "copy":
 		if strings.HasPrefix(src, "walrus://") && !strings.HasPrefix(dst, "walrus://") {
+			// walrus -> local
 			srcCleaned := strings.TrimPrefix(src, "walrus://")
 			if !strings.HasPrefix(srcCleaned, "/") {
 				srcCleaned = "/" + srcCleaned
 			}
 			err = CopyWalrusToLocal(srcCleaned, dst)
 		} else if strings.HasPrefix(dst, "walrus://") && !strings.HasPrefix(src, "walrus://") {
+			// local -> walrus
+			dstCleaned := strings.TrimPrefix(dst, "walrus://")
+			if !strings.HasPrefix(dstCleaned, "/") {
+				dstCleaned = "/" + dstCleaned
+			}
+			err = CopyLocalToWalrus(src, dstCleaned)
 
 		} else if !strings.HasPrefix(dst, "walrus://") && !strings.HasPrefix(src, "walrus://") {
 
