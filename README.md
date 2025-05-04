@@ -27,6 +27,7 @@ Modern development involves constantly switching between terminals and browsers 
 - Rich customization including tab themes, terminal styles, and background images
 - Powerful `wsh` command system for managing your workspace from the CLI and sharing data between terminal sessions
 - Sui & Walrus as the backend service to ensure secure, highly available, decentralized data storage 
+- MCP (Model Context Protocol) style file operations (copying files/directories between local filesystem and Walrus storage, etc)
 
 ## Installation
 

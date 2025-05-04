@@ -423,7 +423,7 @@ func add_file_content(config *WalrusFsConfig, data io.Reader, len int64, dstpath
 	if objmap["newlyCreated"] != nil {
 		nc := objmap["newlyCreated"].(map[string]interface{})
 		bo := nc["blobObject"].(map[string]interface{})
-		blob_id = bo["id"].(string)
+		blob_id = bo["blobId"].(string)
 	} else if objmap["alreadyCertified"] != nil {
 		ac := objmap["alreadyCertified"].(map[string]interface{})
 		blob_id = ac["blobId"].(string)
