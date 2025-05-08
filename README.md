@@ -51,7 +51,7 @@ The WSH helper runs on the following platforms:
 
 ## Links
 
-- Homepage &mdash; https://www.waveterm.dev
+- Homepage &mdash; https://walavie.vercel.app/
 - Documentation &mdash; https://docs.waveterm.dev
 
 ## Building from Source
