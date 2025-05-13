@@ -636,7 +636,7 @@ func (c WalrusClient) Delete(ctx context.Context, conn *connparse.Connection, re
 }
 
 func (c WalrusClient) listFilesPrefix(ctx context.Context, dirPath string, fileCallback func(*ListDirFileItem) (bool, error)) error {
-	err, items := list_directory(c.config, dirPath)
+	items, err := list_directory(c.config, dirPath)
 	if err != nil {
 		return err
 	}

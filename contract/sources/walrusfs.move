@@ -84,18 +84,29 @@ public struct DirListObject has copy, store, drop {
 	walrus_epoch_till: u64,
 }
 
-public struct DirListEvent has copy, drop {
-	list: vector<DirListObject>,
-}
-
 public struct DeleteEvent has copy, drop {
 	path: String,
 }
 
-public struct RecursiveDirListEvent has copy, drop {
+public struct FileObjectEx has copy, store, drop {                                                
+        id: u256, 
+        obj: FileObject,
+}       
+
+public struct DirObjectEx has copy, store, drop {
+        id: u256,      
+        create_ts: u64,
+        tags: vector<String>, 
+        children_file_names: vector<String>,
+        children_file_ids: vector<u256>,
+        children_directory_names: vector<String>,
+        children_directory_ids: vector<u256>,
+}
+
+public struct RecursiveDirList has copy, drop {
 	dirobj: u256,
-	files: VecMap<u256, FileObject>,
-	dirs: VecMap<u256, DirObject>,
+	files: vector<FileObjectEx>,
+	dirs: vector<DirObjectEx>,
 }
 
 fun init(otw: WALRUSFS, ctx: &mut TxContext) {
@@ -272,7 +283,7 @@ public fun add_dir(walrusfsRoot: &mut WalrusfsRoot, clock: &Clock, path: String,
 											
 }
 
-public fun list_dir(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxContext) {
+public fun list_dir(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxContext): vector<DirListObject> {
 	let mut p = path;
 	assert!(p.length() > 0, EPathError);
 	let slash = b"/".to_string();
@@ -344,12 +355,10 @@ public fun list_dir(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxCont
 	};
 
 
-	event::emit(DirListEvent {
-		list: v,
-	});
+        v
 }
 
-public fun stat(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxContext) {
+public fun stat(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxContext): DirListObject {
 	let mut p = path;
 	assert!(p.length() > 0, EPathError);
 
@@ -391,7 +400,7 @@ public fun stat(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxContext)
 		let id = *children_files.get(&p);
 		let f = walrusfsRoot.file_arena.get(&id);
 
-		event::emit(DirListObject {
+		DirListObject {
 			name: p,
 			create_ts: f.create_ts,
 			is_dir: false,
@@ -399,11 +408,11 @@ public fun stat(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxContext)
 			size: f.size,
 			walrus_blob_id: f.walrus_blob_id,
 			walrus_epoch_till: f.walrus_epoch_till,
-		});
+		}
 	} else if (children.contains(&p)) {
 		let id = *children.get(&p);
 		let d = walrusfsRoot.dir_arena.get(&id);
-		event::emit(DirListObject {
+		DirListObject {
 			name: p,
 			create_ts: d.create_ts,
 			is_dir: true,
@@ -411,9 +420,9 @@ public fun stat(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxContext)
 			size: 0u64,
 			walrus_blob_id: b"".to_string(),
 			walrus_epoch_till: 0u64,
-		});
+		}
 	} else {
-		assert!(false, EPathError);
+		abort EPathError
 	}
 }
 
@@ -637,7 +646,7 @@ public fun delete_dir(walrusfsRoot: &mut WalrusfsRoot, path: String, _ctx: &mut 
 	};
 
 	let mut children = &mut walrusfsRoot.children_directories;
-	let mut child_id = 0u256;
+	let mut child_id ;
 	while (true) {
 		let idx = p.index_of(&slash);
 		let len = p.length();
@@ -686,7 +695,7 @@ public fun delete_dir(walrusfsRoot: &mut WalrusfsRoot, path: String, _ctx: &mut 
 }
 
 
-public fun get_dir_all(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxContext) {
+public fun get_dir_all(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxContext): RecursiveDirList {
 	let mut p = path;
 	assert!(p.length() > 0, EPathError);
 
@@ -697,7 +706,7 @@ public fun get_dir_all(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxC
 	};
 
 	let mut children = &walrusfsRoot.children_directories;
-	let mut child_id = 0u256;
+	let mut child_id;
 	while (true) {
 		let idx = p.index_of(&slash);
 		let len = p.length();
@@ -728,22 +737,57 @@ public fun get_dir_all(walrusfsRoot: &WalrusfsRoot, path: String, _ctx: &mut TxC
 	let (fset, dset) = recursive_get_dir_objs(walrusfsRoot, id);
 
 	let mut fsv = fset.into_keys();
-	let mut files: VecMap<u256, FileObject> = vec_map::empty();
+	let mut files: vector<FileObjectEx> = vector::empty();
 	while (!fsv.is_empty()) {
 		let fid = fsv.pop_back();
-		files.insert(fid, *walrusfsRoot.file_arena.get(&fid));
+		files.push_back(FileObjectEx {
+                    id: fid, 
+                    obj: *walrusfsRoot.file_arena.get(&fid)
+                });
 	};
 
 	let mut dsv = dset.into_keys();
-	let mut dirs: VecMap<u256, DirObject> = vec_map::empty();
+	let mut dirs: vector<DirObjectEx> = vector::empty();
 	while (!dsv.is_empty()) {
-		let did = dsv.pop_back();
-		dirs.insert(did, *walrusfsRoot.dir_arena.get(&did));
+		let did = dsv.pop_back(); 
+                let do = *walrusfsRoot.dir_arena.get(&did);
+                
+                let mut cfns: vector<String> = vector::empty();
+                let mut cfis: vector<u256> = vector::empty();
+                
+                let mut i = 0;
+                while (i < do.children_files.size()) {         
+                    let (k, v) = do.children_files.get_entry_by_idx(i);
+                    cfns.push_back(*k);
+                    cfis.push_back(*v);
+                    i = i + 1;
+                };
+
+                let mut cdns: vector<String> = vector::empty();
+                let mut cdis: vector<u256> = vector::empty();
+
+                i = 0;
+                while (i < do.children_directories.size()) {
+                    let (k, v) = do.children_directories.get_entry_by_idx(i);
+                    cdns.push_back(*k);
+                    cdis.push_back(*v);
+                    i = i + 1;
+                };
+                         
+		dirs.push_back(DirObjectEx {
+                     id: did, 
+                     create_ts: do.create_ts,
+                     tags: do.tags,
+                     children_file_names: cfns,
+                     children_file_ids: cfis,
+                     children_directory_names: cdns,
+                     children_directory_ids: cdis,
+                });
 	};
 
-	event::emit(RecursiveDirListEvent {
+	RecursiveDirList {
 		dirobj: id,
 		files: files,
 		dirs: dirs,
-	});
+	}
 }
