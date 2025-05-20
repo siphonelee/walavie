@@ -25,6 +25,10 @@ artifacts/
 !.yarn/sdks
 !.yarn/versions
 
+.anchor
+target
+**/*.rs.bk
+test-ledger
 
 *storybook.log
 storybook-static/
