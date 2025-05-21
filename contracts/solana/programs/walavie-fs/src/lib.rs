@@ -4,7 +4,7 @@
 use anchor_lang::prelude::*;
 use std::collections::BTreeSet; // BTreeSet is still used and generally fine
 
-declare_id!("AqxfwBa8cgX2fG5Avw51por68HQpAVZqLbjsSWhXJg9i"); // Replace with your program ID
+declare_id!("9NhNPHXjiCoZ9Hi5ch26x1yQJUq3u2weNoMeViwu7r2r"); // Replace with your program ID
 
 // Max length for strings to manage account space, adjust as needed
 const MAX_STRING_LEN: usize = 64;
@@ -129,9 +129,9 @@ fn contains_key_in_vec_str(vec: &[KeyValueStringU64], key: &str) -> bool {
 // For Vec<KeyValueU64FileObject> (File Arena)
 fn get_from_file_arena<'a>(
     arena: &'a [KeyValueU64FileObject],
-    id: &'a u64,
+    id: u64,
 ) -> Option<&'a FileObjectAnchor> {
-    arena.iter().find(|kv| kv.key == *id).map(|kv| &kv.value)
+    arena.iter().find(|kv| kv.key == id).map(|kv| &kv.value)
 }
 
 // fn get_mut_from_file_arena(arena: &mut [KeyValueU64FileObject], id: &u64) -> Option<&mut FileObjectAnchor> {
@@ -288,10 +288,9 @@ pub mod walrusfs_anchor {
             None => root_children_files_data,
         };
 
-        if let Some(existing_file_id_ref) = get_from_vec_str_key(children_files_map, &file_name) {
-            let existing_file_id = *existing_file_id_ref; // Dereference to get u64
+        if let Some(existing_file_id) = get_from_vec_str_key(children_files_map, &file_name) {
             if !overwrite {
-                let f = get_from_file_arena(file_arena_data, &existing_file_id)
+                let f = get_from_file_arena(file_arena_data, *existing_file_id)
                     .ok_or(WalrusFsError::ArenaMismatchError)?;
                 emit!(FileAlreadyExistsEvent {
                     path: path.clone(),
@@ -363,13 +362,14 @@ pub mod walrusfs_anchor {
             None => root_children_dirs_data,
         };
 
+        existing = get_from_vec_str_key(children_dirs_map, &dir_name).copied();
+
         root.obj_id_counter += 1;
         let new_dir_id = root.obj_id_counter;
         insert_into_vec_str_key(children_dirs_map, dir_name.clone(), new_dir_id);
-        existing = get_from_vec_str_key(children_dirs_map, &dir_name).copied();
 
-        if let Some(existing_dir_id_ref) = existing {
-            let d = get_from_dir_arena(dir_arena_data, existing_dir_id_ref)
+        if let Some(existing_dir_id) = existing {
+            let d = get_from_dir_arena(dir_arena_data, existing_dir_id)
                 .ok_or(WalrusFsError::ArenaMismatchError)?; // Should exist if ID is in children_dirs
             emit!(DirAlreadyExistsEvent {
                 path: path.clone(),
@@ -431,7 +431,7 @@ pub mod walrusfs_anchor {
 
         for kv_pair in target_dir_files_vec.iter() {
             // Iterate over Vec<KeyValueStringU64>
-            let f = get_from_file_arena(file_arena_data, &kv_pair.value)
+            let f = get_from_file_arena(file_arena_data, kv_pair.value)
                 .ok_or(WalrusFsError::ArenaMismatchError)?;
             results.push(DirListObjectAnchor {
                 name: kv_pair.key.clone(),
@@ -466,12 +466,14 @@ pub mod walrusfs_anchor {
                 let parent_dir = get_from_dir_arena(dir_arena_data, id)
                     .ok_or(WalrusFsError::ArenaMismatchError)?;
                 (&parent_dir.children_files, &parent_dir.children_directories)
-            }
-            None => (root_children_files_data, root_children_dirs_data),
+            },
+            None => {
+                (root_children_files_data, root_children_dirs_data)
+            },
         };
 
         if let Some(file_id_ref) = get_from_vec_str_key(parent_files_vec, &item_name) {
-            let f = get_from_file_arena(file_arena_data, file_id_ref)
+            let f = get_from_file_arena(file_arena_data, *file_id_ref)
                 .ok_or(WalrusFsError::ArenaMismatchError)?;
             Ok(DirListObjectAnchor {
                 name: item_name,
@@ -696,16 +698,16 @@ pub mod walrusfs_anchor {
                 }
                 None => root_children_dirs_data,
             };
-            *get_from_vec_str_key(grandparent_children_dirs_vec, &target_dir_name_from_parent)
+            get_from_vec_str_key(grandparent_children_dirs_vec, &target_dir_name_from_parent)
                 .ok_or(WalrusFsError::PathNotFound)?
         };
 
         let (file_ids, dir_ids_recursive) =
-            internal_recursive_get_dir_obj_ids(target_dir_id, dir_arena_data)?;
+            internal_recursive_get_dir_obj_ids(*target_dir_id, dir_arena_data)?;
 
         let mut files_ex = Vec::new();
         for fid in file_ids {
-            if let Some(obj) = get_from_file_arena(file_arena_data, &fid) {
+            if let Some(obj) = get_from_file_arena(file_arena_data, fid) {
                 files_ex.push(FileObjectExAnchor {
                     id: fid,
                     obj: obj.clone(),
@@ -715,7 +717,7 @@ pub mod walrusfs_anchor {
 
         let mut dirs_ex = Vec::new();
         let mut all_dir_ids_to_fetch = BTreeSet::new();
-        all_dir_ids_to_fetch.insert(target_dir_id);
+        all_dir_ids_to_fetch.insert(*target_dir_id);
         for did in dir_ids_recursive {
             all_dir_ids_to_fetch.insert(did);
         }
@@ -747,7 +749,7 @@ pub mod walrusfs_anchor {
         }
 
         Ok(RecursiveDirListAnchor {
-            dirobj: target_dir_id,
+            dirobj: *target_dir_id,
             files: files_ex,
             dirs: dirs_ex,
         })
